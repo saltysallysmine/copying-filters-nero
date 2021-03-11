@@ -1,0 +1,264 @@
+rand_seed( get_seconds()) 
+
+showType=1
+step=0
+
+include "neural_func2.pixi"
+
+graf = new(1,1,FLOAT)
+
+// ----   создаём нейросеть  ------------------------------
+//-----0
+	N0  =  new(10,2,FLOAT)   // первый слой входной
+	clean(N0)	N0[9,0]=1	
+	W01 =  new(10,4,FLOAT)   // матрица весов
+//-----1
+	N1  =  new(5,2,FLOAT)   // второй слой скрытый
+	clean(N1)   N1[4,0]=1	
+	W12 =  new(5,3,FLOAT)   // матрица весов
+//-----2
+	N2  =  new(4,2,FLOAT)   // третий слой выход	
+	clean(N2)   N2[3,0]=1	
+	W23 =  new(4,2,FLOAT)   // матрица весов	
+//-----3
+	N3  =  new(2,2,FLOAT)   // третий слой выход	
+	clean(N3)	
+//-----ideal
+	IDL =  new(2,1,FLOAT)   // нужно получить
+	clean(IDL)	
+
+// заполняем матрицы случайными значениями
+	fillW(W01)
+	fillW(W12)
+	fillW(W23)	
+	
+//-----------  загружаем задачу   ---------------------------------------
+	task=load("task2.task")  
+    ses = 0
+	err = 0     // ошибка на одном примере
+	errOut = 1  // ошибка за эпоху
+///////////////////////////////////////////////////////////////////////////////
+
+	
+aaa:
+	clear()       // очистит экран
+	showtask()    // отображение примера на экране
+	
+	// загружаем пример во входные нейроны
+	N0[0,0]=task[0,ses]
+	N0[1,0]=task[1,ses]
+	N0[2,0]=task[2,ses]
+	N0[3,0]=task[3,ses]
+	N0[4,0]=task[4,ses]
+	N0[5,0]=task[5,ses]
+	N0[6,0]=task[6,ses]
+	N0[7,0]=task[7,ses]
+	N0[8,0]=task[8,ses]
+	// загружаем правильные ответы
+	if task[9,ses] == 1	 { IDL[0,0] = 0.8 }
+	else                 { IDL[0,0] = 0.2 }
+	if task[10,ses] == 1 { IDL[1,0] = 0.8 }
+	else                 { IDL[1,0] = 0.2 }
+	
+	// прямое прохождение сигнала
+    forWards(N0,W01,N1)
+	forWards(N1,W12,N2)	
+	forWards(N2,W23,N3)	
+	// определяем ошибку
+	fixOutError(IDL,N3)	
+	findError(N2, W23, N3) 
+	findError(N1, W12, N2) 
+	// обратное распространение ошибки
+	backWards(N2, W23, N3,0.5)   
+	backWards(N1, W12, N2,0.5)
+   	backWards(N0, W01, N1,0.5)	
+	
+ //------- выводим значение всех входов выходов связей на экран ------------------	
+	printLayer(N0 ,-570,-320, #ffffff,#dd00dd)
+	printMatrix(W01,-570,-270, #00dddd)
+	printLayer(N1 ,-570, -130, #ffffff,#dd00dd)
+	printMatrix(W12,-570,-70, #00dddd)
+	printLayer(N2 ,-570,  80, #ffffff,#dd00dd)	
+	printMatrix(W23,-570, 130, #00dddd)	
+	printLayer(N3 ,-570,  210, #ffffff,#dd00dd)	
+	
+	printMatrix(IDL,-570,  190, #FFFF00)
+	
+	print("error", 200,-10)
+	print(n2s(errOut),200,20)
+	box(150,-20,100,50,RED)
+//--------------------------------------------	
+	
+
+	ses=ses+1   // номер примера
+	mis0 = 0.5*(IDL[0,0]-N3[0,0])*(IDL[0,0]-N3[0,0]) //ошибка 1 выходного нейрона в квадрате
+	mis1 = 0.5*(IDL[1,0]-N3[1,0])*(IDL[1,0]-N3[1,0]) //ошибка 2 выходного нейрона в квадрате
+	err = err + mis0 + mis1                          // общая ошибка
+	
+	if ses == 16  // если прошли все 16 примеров
+	{
+		errOut = err   
+		graf[step,0]=errOut // сохраним ошибку эпохи для графика
+		resize(graf,step+2) 
+		err = 0
+		ses=0
+		step=step+1
+	}
+	
+	box(40,-20,100,50,GREEN)
+	print("steps",90,-10)     // выводим на экран количество пройденных эпох
+	print(n2s(step),90,20)
+	
+	event()                            //проверим клики по экрану для определения режима отображения
+	                                   // если режим 0, то ничего не отображаем
+	if showType == 1 { frame() }       // если режим 1, то быстро отображаем
+	if showType == 2 { frame(3000) }   // если режим 2, то делаем паузу после каждого хода
+	
+	
+	if (errOut < 0.001) {	goto bbb }  // на выход, если ошибка меньше заданной
+	goto aaa
+	
+bbb:
+	save(graf,"graf",FORMAT_PIXICONTAINER)  // сохраняем массив ошибок для графика
+	print("end",300,30)	
+	print(n2s(errOut),300,60)
+	while 1 { frame(100) }                  // валяем дурака
+
+
+
+//#####################   ФУНКЦИИ   ###############################
+
+// показать текущий пример
+fn showtask()
+{
+	$x0 = -80
+	$x1 = -40
+	$x2 = 0
+	$y0 = 100
+	$y1 = 140
+	$y2 = 180
+	$siz = 32
+	if (task[0,ses] > 0.5) { fbox($x0,$y0,$siz,$siz,BLUE) }
+	else                  { fbox($x0,$y0,$siz,$siz,WHITE) }
+	if (task[1,ses] > 0.5) { fbox($x1,$y0,$siz,$siz,BLUE) }
+	else                  { fbox($x1,$y0,$siz,$siz,WHITE) }	
+	if (task[2,ses] > 0.5) { fbox($x2,$y0,$siz,$siz,BLUE) }
+	else                  { fbox($x2,$y0,$siz,$siz,WHITE) }
+	
+	if (task[3,ses] > 0.5) { fbox($x0,$y1,$siz,$siz,BLUE) }
+	else                  { fbox($x0,$y1,$siz,$siz,WHITE) }
+	if (task[4,ses] > 0.5) { fbox($x1,$y1,$siz,$siz,BLUE) }
+	else                  { fbox($x1,$y1,$siz,$siz,WHITE) }
+	if (task[5,ses] > 0.5) { fbox($x2,$y1,$siz,$siz,BLUE) }
+	else                  { fbox($x2,$y1,$siz,$siz,WHITE) }
+	
+	
+	if (task[6,ses] > 0.5) { fbox($x0,$y2,$siz,$siz,BLUE) }
+	else                  { fbox($x0,$y2,$siz,$siz,WHITE) }
+	if (task[7,ses] > 0.5) { fbox($x1,$y2,$siz,$siz,BLUE) }
+	else                  { fbox($x1,$y2,$siz,$siz,WHITE) }
+	if (task[8,ses] > 0.5) { fbox($x2,$y2,$siz,$siz,BLUE) }
+	else                  { fbox($x2,$y2,$siz,$siz,WHITE) }
+
+	if (task[9,ses] > 0.5) { fbox(80,$y0+20,$siz,$siz,BLUE) }
+	else                  { fbox(80,$y0+20,$siz,$siz,WHITE) }
+	print("horizontal", 180,$y0+32)
+	if (task[10,ses] > 0.5){ fbox(80,$y1+20,$siz,$siz,BLUE) }
+	else                  { fbox(80,$y1+20,$siz,$siz,WHITE) }	
+	print("vertical", 180,$y1+32)
+	box(70,$y0+10,200,90)
+}
+
+
+// проверка кликов на экране
+// если кликнуть справо-сверху экрана, то после каждого хода будет задаржка
+// если кликнуть справо-центр экрана, то без задержек задаржка
+// если кликнуть справо-снизу экрана, то обновления экрана не будет, но скорость возрастет
+fn event()
+{
+	while( get_event() ) 
+	{  
+		if EVT[ EVT_TYPE ] == EVT_MOUSEBUTTONDOWN
+		{
+            if  EVT[ EVT_X ] > 300
+			{
+				if EVT[ EVT_Y ] < -200
+				{  
+				   showType=2
+				}
+				else
+				{
+					if EVT[ EVT_Y ] > 200
+					{  
+					   showType=0
+					}
+					else
+					{  
+					   showType=1
+					}
+				}
+			}
+
+		}
+
+		if EVT[ EVT_TYPE ] == EVT_QUIT  //
+		{ 
+			//save(graf,"graf1",FORMAT_PIXICONTAINER)
+			halt
+		} 
+	}              
+}
+
+
+// вывод массива на экран,
+// задается цвет и верхний левый угол
+fn printMatrix($M,$x,$y,$color)
+{
+	$x=$x+75
+	$y=$y+10
+	$wt = get_xsize($M)
+	$ht = get_ysize($M)
+
+	$w=0
+	while $w<$wt
+	{
+		$yy=$y
+		$h=0
+		while $h<$ht
+		{
+			print(n2s($M[$w,$h]),$x,$yy,$color,RIGHT)
+			$h=$h+1
+			$yy=$yy+20
+		}
+		$w=$w+1
+		$x=$x+100
+	}
+}
+
+// вывод значений слоя нейронов на экран
+// сверху выход нейронов, снизу ошибка
+// задается цвет и верхний левый угол
+fn printLayer($N,$x,$y,$color,$colorE)
+{
+	$x=$x+75
+	$y=$y+10
+	$wt = get_xsize($N)
+	$w=0
+	while $w<$wt
+	{
+		print(n2s($N[$w,0]),$x,$y   ,$color ,RIGHT)
+		print(n2s($N[$w,1]),$x,$y+20,$colorE,RIGHT)
+		$w=$w+1
+		$x=$x+100
+	}
+}
+
+
+
+// берёт число возврат-строка
+fn n2s( $n )
+ {
+  $s=""
+  num2str( $s, $n )
+  ret( $s)
+ } 
